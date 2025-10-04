@@ -51,9 +51,12 @@
     <div class="container mx-auto p-4 md:p-8 max-w-5xl">
 
         <!-- Header -->
-        <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-blue-700">Kurswahl-Assistent</h1>
-            <p id="header-subtitle" class="text-gray-600 mt-2">Wählen Sie Ihr Wunschprofil für die Studienstufe.</p>
+        <header class="text-center mb-8 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+            <img src="https://www.marion-doenhoff-gymnasium.de/wp-content/uploads/2016/06/MD%C3%B6nhoffGymLogo_w-240px.png" alt="Logo des Marion-Dönhoff-Gymnasiums" class="h-16 w-auto">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold text-blue-700">Kurswahl-Assistent</h1>
+                <p id="header-subtitle" class="text-gray-600 mt-2">Wählen Sie Ihr Wunschprofil für die Studienstufe.</p>
+            </div>
         </header>
 
         <!-- Fortschrittsanzeige -->
@@ -123,6 +126,14 @@
                     { name: 'PGW', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' }, { name: 'Sport', sws: 4, type: 'profilgebend', area: 'sport' },
                     { name: 'Biologie', sws: 4, type: 'profilbegleitend', area: 'naturwissenschaft' }, { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
                 ]
+            },
+            {
+                id: 'kosmopolit', name: 'Kosmopolit (GymBla)', shortname: 'Kosmo',
+                subjects: [
+                    { name: 'PGW (bilingual)', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' },
+                    { name: 'Geschichte', sws: 2, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' },
+                    { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
             }
         ];
 
@@ -143,6 +154,7 @@
             artMusicChoice: null,
             gusChoice: null,
             gusLanguageChoice: null,
+            kosmopolitLanguageChoice: null,
             coreSubjects: { deutsch: { level: null, area: 'sprache', sws: 4 }, englisch: { level: null, area: 'sprache', sws: 4 }, mathematik: { level: null, area: 'mathematik', sws: 4 } },
             electives: {},
         };
@@ -167,7 +179,8 @@
             if (userSelection.artMusicChoice) allSubjects.push({ name: userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik', sws: 4, type: 'profilgebend', area: 'kunst' });
             if (userSelection.gusChoice === 'wirtschaft') allSubjects.push({ name: 'Wirtschaft', sws: 4, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' });
             if (userSelection.gusLanguageChoice) allSubjects.push({ name: userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch', sws: 4, type: 'profilbegleitend', area: 'sprache' });
-            
+            if (userSelection.kosmopolitLanguageChoice) allSubjects.push({ name: userSelection.kosmopolitLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch', sws: 4, type: 'profilgebend', area: 'sprache' });
+
             Object.entries(userSelection.coreSubjects).forEach(([name, details]) => {
                 if (details.level) allSubjects.push({ name: name.charAt(0).toUpperCase() + name.slice(1), ...details });
             });
@@ -215,6 +228,7 @@
                 const isSelected = userSelection.profileId === profile.id;
                 const mainSubjects = profile.subjects.filter(s => s.type === 'profilgebend').map(s => s.isCore ? `${s.name} (KF)` : s.name);
                 if (profile.id === 'kunst-kultur') mainSubjects.unshift('Bildende Kunst oder Musik');
+                if (profile.id === 'kosmopolit') mainSubjects.unshift('Französisch oder Spanisch');
                 const accompanyingSubjects = profile.subjects.filter(s => s.type === 'profilbegleitend').map(s => s.name);
                  if (profile.id === 'gesellschaft-sprache') accompanyingSubjects.push('2. Fremdsprache oder Wirtschaft');
 
@@ -285,6 +299,22 @@
             mainContent.innerHTML = html;
             addCardSelectionListeners();
         }
+
+        function renderKosmopolitLanguageSelection() {
+             const choices = [{ id: 'franzoesisch', name: 'Französisch' }, { id: 'spanisch', name: 'Spanisch' }];
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-md mx-auto">';
+            choices.forEach(choice => {
+                const isSelected = userSelection.kosmopolitLanguageChoice === choice.id;
+                html += `
+                    <div id="${choice.id}" data-selection-key="kosmopolitLanguageChoice" class="selection-card bg-white p-8 rounded-lg shadow-md text-center border-2 ${isSelected ? 'border-blue-600 ring-2 ring-blue-300 selected' : 'border-transparent hover:border-blue-500'}">
+                        <h2 class="text-2xl font-bold text-gray-800">${choice.name}</h2>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            mainContent.innerHTML = html;
+            addCardSelectionListeners();
+        }
         
         function renderCoreSubjectSelection() {
             const subjects = [
@@ -339,6 +369,11 @@
                 const choiceName = userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik';
                 profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
             }
+            if (userSelection.profileId === 'kosmopolit' && userSelection.kosmopolitLanguageChoice) {
+                const choiceName = userSelection.kosmopolitLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
+                profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+
 
             let profilbegleitendHtml = selectedProfileData.subjects
                 .filter(s => s.type === 'profilbegleitend')
@@ -425,6 +460,10 @@
                 const langName = userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
                 subjectsBeforeElectives.push({ name: langName });
             }
+             if (userSelection.kosmopolitLanguageChoice) {
+                const langName = userSelection.kosmopolitLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
+                subjectsBeforeElectives.push({ name: langName });
+            }
             Object.entries(userSelection.coreSubjects).forEach(([name, details]) => {
                 if (details.level) subjectsBeforeElectives.push({ name: name.charAt(0).toUpperCase() + name.slice(1)});
             });
@@ -479,6 +518,10 @@
                 .join('');
             if (userSelection.profileId === 'kunst-kultur' && userSelection.artMusicChoice) {
                 const choiceName = userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik';
+                profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+             if (userSelection.profileId === 'kosmopolit' && userSelection.kosmopolitLanguageChoice) {
+                const choiceName = userSelection.kosmopolitLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
                 profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
             }
             let profilbegleitendHtml = selectedProfileData.subjects
@@ -590,8 +633,8 @@
             </div>`;
             
             const allObligationsMet = Object.values(obligations).every(val => val === true);
-            nextButton.textContent = 'Abschliessen';
-            nextButton.disabled = !(totalSWS >= 32 && totalSWS <= 36 && allObligationsMet);
+            nextButton.textContent = 'Neustart';
+            nextButton.disabled = false;
         }
 
         function validateCoreSubjects(){
@@ -676,6 +719,10 @@
                         headerSubtitle.textContent = 'Wählen Sie Ihre profilbegleitende Option.';
                         renderGusSelection();
                         if(userSelection.gusChoice) nextButton.disabled = false;
+                    } else if (userSelection.profileId === 'kosmopolit') {
+                        headerSubtitle.textContent = 'Wählen Sie Ihre profilgebende Fremdsprache.';
+                        renderKosmopolitLanguageSelection();
+                        if (userSelection.kosmopolitLanguageChoice) nextButton.disabled = false;
                     }
                     break;
                 case 3: 
@@ -718,6 +765,7 @@
                         userSelection.artMusicChoice = null;
                         userSelection.gusChoice = null;
                         userSelection.gusLanguageChoice = null;
+                        userSelection.kosmopolitLanguageChoice = null;
                         userSelection.coreSubjects = { deutsch: { level: null, area: 'sprache', sws: 4 }, englisch: { level: null, area: 'sprache', sws: 4 }, mathematik: { level: null, area: 'mathematik', sws: 4 } };
                         userSelection.electives = {};
                     } else if (selectionKey === 'gusChoice') {
@@ -781,22 +829,29 @@
         }
 
         nextButton.addEventListener('click', () => {
-            if(nextButton.textContent === 'Abschliessen') {
-                mainContent.innerHTML = `<div class="text-center p-8 bg-white rounded-lg shadow-md"><h2 class="text-2xl font-bold text-green-600">Vielen Dank!</h2><p class="mt-2 text-gray-700">Ihre Kurswahl wurde erfolgreich übermittelt.</p></div>`;
-                nextButton.classList.add('hidden');
-                backButton.classList.add('hidden');
-                selectionMessage.textContent = '';
+            if (currentStep === 6) {
+                // Reset state to initial values
+                userSelection.profileId = null;
+                userSelection.artMusicChoice = null;
+                userSelection.gusChoice = null;
+                userSelection.gusLanguageChoice = null;
+                userSelection.kosmopolitLanguageChoice = null;
+                userSelection.coreSubjects = { deutsch: { level: null, area: 'sprache', sws: 4 }, englisch: { level: null, area: 'sprache', sws: 4 }, mathematik: { level: null, area: 'mathematik', sws: 4 } };
+                userSelection.electives = {};
+                
+                // Go back to the first step
+                updateUIForStep(1);
                 return;
             }
 
             if (currentStep === 1) {
-                if (userSelection.profileId === 'kunst-kultur' || userSelection.profileId === 'gesellschaft-sprache') {
+                if (['kunst-kultur', 'gesellschaft-sprache', 'kosmopolit'].includes(userSelection.profileId)) {
                     updateUIForStep(2);
                 } else {
                     updateUIForStep(3);
                 }
             } else if (currentStep === 2) {
-                if (userSelection.profileId === 'kunst-kultur') {
+                if (userSelection.profileId === 'kunst-kultur' || userSelection.profileId === 'kosmopolit') {
                     updateUIForStep(3);
                 } else if (userSelection.profileId === 'gesellschaft-sprache') {
                     if (userSelection.gusChoice === 'wirtschaft') {
@@ -827,7 +882,7 @@
             } else if (currentStep === 4) {
                 updateUIForStep(3);
             } else if (currentStep === 3) {
-                 if (userSelection.profileId === 'kunst-kultur' || userSelection.profileId === 'gesellschaft-sprache') {
+                 if (['kunst-kultur', 'gesellschaft-sprache', 'kosmopolit'].includes(userSelection.profileId)) {
                     updateUIForStep(2);
                 } else {
                     updateUIForStep(1);
