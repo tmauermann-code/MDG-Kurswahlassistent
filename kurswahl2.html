@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kurswahl-Assistent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .selection-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            /* Fix for Safari rendering bug on iOS */
+            transform: translateZ(0);
+            will-change: transform;
+        }
+        .selection-card.selected {
+            transform: translateY(-5px) translateZ(0);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .level-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .level-btn.selected {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .level-btn.disabled {
+            background-color: #e5e7eb; /* gray-200 */
+            color: #4b5563; /* gray-600 */
+            cursor: not-allowed;
+        }
+        .elective-checkbox:checked + label {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+        .elective-checkbox:disabled + label {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+            cursor: not-allowed;
+            border-color: #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-700">Kurswahl-Assistent</h1>
+            <p id="header-subtitle" class="text-gray-600 mt-2">Wählen Sie Ihr Wunschprofil für die Studienstufe.</p>
+        </header>
+
+        <!-- Fortschrittsanzeige -->
+        <div class="mb-8">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 16.66%"></div>
+            </div>
+            <p id="progress-text" class="text-center text-sm text-gray-500 mt-2">Schritt 1 von 6: Profilwahl</p>
+        </div>
+
+        <!-- Hauptbereich für die Schritte -->
+        <main id="main-content">
+            <!-- Inhalt wird dynamisch per JS geladen -->
+        </main>
+        
+        <!-- Fußzeile mit Buttons -->
+        <footer class="mt-10 flex flex-col items-center">
+            <div class="flex space-x-4">
+                <button id="back-button" class="bg-gray-300 text-gray-800 font-bold py-3 px-8 rounded-lg shadow-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 transition-all duration-300 hidden">
+                    Zurück
+                </button>
+                <button id="next-button" class="bg-blue-500 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none" disabled>
+                    Weiter
+                </button>
+            </div>
+            <div id="selection-message" class="mt-4 text-gray-700 font-medium h-6"></div>
+        </footer>
+
+    </div>
+
+    <script>
+        // --- DATEN ---
+        const profiles = [
+            {
+                id: 'zukunft-natur', name: 'Zukunft Naturwissenschaften', shortname: 'ZuNft',
+                subjects: [
+                    { name: 'Physik', sws: 4, type: 'profilgebend', area: 'naturwissenschaft' }, { name: 'Chemie', sws: 4, type: 'profilgebend', area: 'naturwissenschaft' },
+                    { name: 'Geographie', sws: 2, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' }, { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
+            },
+            {
+                id: 'erde-mensch', name: 'Erde und Mensch', shortname: 'EuM',
+                subjects: [
+                    { name: 'Biologie', sws: 4, type: 'profilgebend', area: 'naturwissenschaft' }, { name: 'Geographie', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' },
+                    { name: 'PGW', sws: 2, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' }, { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
+            },
+            {
+                id: 'gesellschaft-sprache', name: 'Gesellschaft und Sprache', shortname: 'GuS',
+                subjects: [
+                    { name: 'Geschichte bilingual', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' },
+                    { name: 'Englisch', sws: 4, type: 'profilgebend', isCore: true, area: 'sprache' },
+                    { name: 'PGW', sws: 2, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' }, { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
+            },
+            {
+                id: 'kunst-kultur', name: 'Kunst/Musik und Kultur', shortname: 'KuK/MuK',
+                subjects: [
+                    { name: 'Deutsch', sws: 4, type: 'profilgebend', isCore: true, area: 'sprache' },
+                    { name: 'Geschichte', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' }, 
+                    { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
+            },
+            {
+                id: 'gesellschaft-bewegung', name: 'Gesellschaft in Bewegung', shortname: 'GiB',
+                subjects: [
+                    { name: 'PGW', sws: 4, type: 'profilgebend', area: 'gesellschaftswissenschaft' }, { name: 'Sport', sws: 4, type: 'profilgebend', area: 'sport' },
+                    { name: 'Biologie', sws: 4, type: 'profilbegleitend', area: 'naturwissenschaft' }, { name: 'Seminar', sws: 2, type: 'profilbegleitend' }
+                ]
+            }
+        ];
+
+        const electiveSubjects = {
+            'kunst': [{ name: 'Kunst', sws: 2 }, { name: 'Musik', sws: 2 }, { name: 'Theater', sws: 2 }],
+            'gesellschaftswissenschaft': [{ name: 'PGW', sws: 2 }, { name: 'Geschichte', sws: 2 }, { name: 'Geographie', sws: 2 }, { name: 'Wirtschaft', sws: 2 }],
+            'naturwissenschaft': [{ name: 'Biologie', sws: 4 }, { name: 'Chemie', sws: 2 }, { name: 'Physik', sws: 2 }, { name: 'Informatik', sws: 2 }],
+            'religion_philosophie': [{ name: 'Religion', sws: 2 }, { name: 'Philosophie', sws: 2 }],
+            'sprache_weiter': [{ name: 'Französisch', sws: 4 }, { name: 'Spanisch', sws: 4 }, { name: 'Latein', sws: 4 }],
+            'sport': [{ name: 'Sport', sws: 2 }, { name: 'Sport+Theorie', sws: 4 }]
+        };
+
+
+        // --- ZUSTANDSVERWALTUNG ---
+        let currentStep = 1;
+        const userSelection = {
+            profileId: null,
+            artMusicChoice: null,
+            gusChoice: null,
+            gusLanguageChoice: null,
+            coreSubjects: { deutsch: { level: null, area: 'sprache', sws: 4 }, englisch: { level: null, area: 'sprache', sws: 4 }, mathematik: { level: null, area: 'mathematik', sws: 4 } },
+            electives: {},
+        };
+
+        // --- DOM-ELEMENTE ---
+        const mainContent = document.getElementById('main-content');
+        const nextButton = document.getElementById('next-button');
+        const backButton = document.getElementById('back-button');
+        const selectionMessage = document.getElementById('selection-message');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const headerSubtitle = document.getElementById('header-subtitle');
+
+        // --- HILFSFUNKTIONEN ---
+        function getUniqueSelectedSubjects() {
+            if (!userSelection.profileId) return [];
+
+            const allSubjects = [];
+            const profile = profiles.find(p => p.id === userSelection.profileId);
+            allSubjects.push(...profile.subjects);
+
+            if (userSelection.artMusicChoice) allSubjects.push({ name: userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik', sws: 4, type: 'profilgebend', area: 'kunst' });
+            if (userSelection.gusChoice === 'wirtschaft') allSubjects.push({ name: 'Wirtschaft', sws: 4, type: 'profilbegleitend', area: 'gesellschaftswissenschaft' });
+            if (userSelection.gusLanguageChoice) allSubjects.push({ name: userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch', sws: 4, type: 'profilbegleitend', area: 'sprache' });
+            
+            Object.entries(userSelection.coreSubjects).forEach(([name, details]) => {
+                if (details.level) allSubjects.push({ name: name.charAt(0).toUpperCase() + name.slice(1), ...details });
+            });
+
+            allSubjects.push(...Object.values(userSelection.electives));
+
+            const subjectMap = new Map();
+            allSubjects.forEach(subject => {
+                if (!subjectMap.has(subject.name)) {
+                    subjectMap.set(subject.name, subject);
+                }
+            });
+
+            return Array.from(subjectMap.values());
+        }
+
+        function checkObligations() {
+            const uniqueSubjects = getUniqueSelectedSubjects();
+
+            const totalSwsByArea = (area) => {
+                return uniqueSubjects
+                    .filter(s => s.area === area)
+                    .reduce((sum, subject) => sum + subject.sws, 0);
+            };
+
+            return {
+                kunst: uniqueSubjects.some(s => s.area === 'kunst'),
+                gesellschaftswissenschaft: totalSwsByArea('gesellschaftswissenschaft') >= 4,
+                naturwissenschaft: totalSwsByArea('naturwissenschaft') >= 4,
+                religion_philosophie: uniqueSubjects.some(s => s.area === 'religion_philosophie'),
+                sport: uniqueSubjects.some(s => s.area === 'sport'),
+            };
+        }
+
+        function calculateTotalSWS() {
+            const uniqueSubjects = getUniqueSelectedSubjects();
+            return uniqueSubjects.reduce((sum, s) => sum + (s.sws || 0), 0);
+        }
+
+        // --- FUNKTIONEN ZUM RENDERN DER SCHRITTE ---
+
+        function renderProfileSelection() {
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
+            profiles.forEach(profile => {
+                const isSelected = userSelection.profileId === profile.id;
+                const mainSubjects = profile.subjects.filter(s => s.type === 'profilgebend').map(s => s.isCore ? `${s.name} (KF)` : s.name);
+                if (profile.id === 'kunst-kultur') mainSubjects.unshift('Bildende Kunst oder Musik');
+                const accompanyingSubjects = profile.subjects.filter(s => s.type === 'profilbegleitend').map(s => s.name);
+                 if (profile.id === 'gesellschaft-sprache') accompanyingSubjects.push('2. Fremdsprache oder Wirtschaft');
+
+                html += `
+                    <div id="${profile.id}" data-selection-key="profileId" class="selection-card bg-white p-6 rounded-lg shadow-md border-2 ${isSelected ? 'border-blue-600 ring-2 ring-blue-300 selected' : 'border-transparent hover:border-blue-500'}">
+                        <div class="flex justify-between items-start mb-3">
+                            <h2 class="text-xl font-bold text-gray-800 pr-2">${profile.name}</h2>
+                            <span class="flex-shrink-0 bg-blue-100 text-blue-800 text-xs font-semibold ml-2 px-2.5 py-0.5 rounded-full">${profile.shortname}</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-sm text-blue-700">Profilgebende Fächer (eA):</h3>
+                            <ul class="list-disc list-inside text-gray-700 mb-3">${mainSubjects.map(s => `<li>${s}</li>`).join('')}</ul>
+                            <h3 class="font-semibold text-sm text-gray-600">Profilbegleitende Fächer (gA):</h3>
+                            <ul class="list-disc list-inside text-gray-600">${accompanyingSubjects.map(s => `<li>${s}</li>`).join('')}</ul>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            mainContent.innerHTML = html;
+            addCardSelectionListeners();
+        }
+        
+        function renderArtMusicSelection() {
+            const choices = [{ id: 'bildende-kunst', name: 'Bildende Kunst' }, { id: 'musik', name: 'Musik' }];
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-md mx-auto">';
+            choices.forEach(choice => {
+                const isSelected = userSelection.artMusicChoice === choice.id;
+                html += `
+                    <div id="${choice.id}" data-selection-key="artMusicChoice" class="selection-card bg-white p-8 rounded-lg shadow-md text-center border-2 ${isSelected ? 'border-blue-600 ring-2 ring-blue-300 selected' : 'border-transparent hover:border-blue-500'}">
+                        <h2 class="text-2xl font-bold text-gray-800">${choice.name}</h2>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            mainContent.innerHTML = html;
+            addCardSelectionListeners();
+        }
+        
+        function renderGusSelection() {
+            const choices = [{ id: 'fremdsprache', name: '2. Fremdsprache' }, { id: 'wirtschaft', name: 'Wirtschaft' }];
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-md mx-auto">';
+            choices.forEach(choice => {
+                const isSelected = userSelection.gusChoice === choice.id;
+                html += `
+                    <div id="${choice.id}" data-selection-key="gusChoice" class="selection-card bg-white p-8 rounded-lg shadow-md text-center border-2 ${isSelected ? 'border-blue-600 ring-2 ring-blue-300 selected' : 'border-transparent hover:border-blue-500'}">
+                        <h2 class="text-2xl font-bold text-gray-800">${choice.name}</h2>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            mainContent.innerHTML = html;
+            addCardSelectionListeners();
+        }
+
+        function renderGusLanguageSelection() {
+             const choices = [{ id: 'franzoesisch', name: 'Französisch' }, { id: 'spanisch', name: 'Spanisch' }];
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-md mx-auto">';
+            choices.forEach(choice => {
+                const isSelected = userSelection.gusLanguageChoice === choice.id;
+                html += `
+                    <div id="${choice.id}" data-selection-key="gusLanguageChoice" class="selection-card bg-white p-8 rounded-lg shadow-md text-center border-2 ${isSelected ? 'border-blue-600 ring-2 ring-blue-300 selected' : 'border-transparent hover:border-blue-500'}">
+                        <h2 class="text-2xl font-bold text-gray-800">${choice.name}</h2>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            mainContent.innerHTML = html;
+            addCardSelectionListeners();
+        }
+        
+        function renderCoreSubjectSelection() {
+            const subjects = [
+                { id: 'deutsch', name: 'Deutsch' },
+                { id: 'englisch', name: 'Englisch' },
+                { id: 'mathematik', name: 'Mathematik' },
+            ];
+            
+            if(userSelection.profileId === 'kunst-kultur') userSelection.coreSubjects.deutsch.level = 'eA';
+            if(userSelection.profileId === 'gesellschaft-sprache') userSelection.coreSubjects.englisch.level = 'eA';
+
+            let html = `<div class="bg-white p-6 rounded-lg shadow-md">
+                <p class="text-center text-gray-600 mb-6">Wählen Sie für jedes Kernfach das Anforderungsniveau. Mindestens zwei Fächer müssen auf erhöhtem Niveau (eA) belegt werden.</p>
+                <div class="space-y-6">`;
+
+            subjects.forEach(subject => {
+                const currentSelection = userSelection.coreSubjects[subject.id].level;
+                const isFixedToEA = (subject.id === 'deutsch' && userSelection.profileId === 'kunst-kultur') || 
+                                (subject.id === 'englisch' && userSelection.profileId === 'gesellschaft-sprache');
+
+                html += `
+                    <div class="flex items-center justify-between p-4 rounded-lg bg-gray-50">
+                        <h3 class="text-lg font-bold text-gray-800">${subject.name}</h3>
+                        <div class="flex space-x-2">
+                            <button data-subject="${subject.id}" data-level="gA" class="level-btn font-semibold py-2 px-4 rounded-md border border-gray-300 ${currentSelection === 'gA' ? 'selected' : ''} ${isFixedToEA ? 'disabled' : ''}" ${isFixedToEA ? 'disabled' : ''}>
+                                Grundlegend (gA)
+                            </button>
+                            <button data-subject="${subject.id}" data-level="eA" class="level-btn font-semibold py-2 px-4 rounded-md border border-gray-300 ${currentSelection === 'eA' || isFixedToEA ? 'selected' : ''}" ${!isFixedToEA ? '' : 'disabled'}>
+                                Erhöht (eA)
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            mainContent.innerHTML = html;
+            addCoreSubjectListeners();
+            validateCoreSubjects();
+        }
+
+        function renderIntermediateSummary() {
+            const selectedProfileData = profiles.find(p => p.id === userSelection.profileId);
+            if (!selectedProfileData) return;
+
+            let profilgebendHtml = selectedProfileData.subjects
+                .filter(s => s.type === 'profilgebend' && !s.isCore)
+                .map(s => `<li>${s.name} <span class="text-gray-500 font-normal">(${s.sws} SWS)</span></li>`)
+                .join('');
+
+            if (userSelection.profileId === 'kunst-kultur' && userSelection.artMusicChoice) {
+                const choiceName = userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik';
+                profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+
+            let profilbegleitendHtml = selectedProfileData.subjects
+                .filter(s => s.type === 'profilbegleitend')
+                .map(s => `<li>${s.name} <span class="text-gray-500 font-normal">(${s.sws} SWS)</span></li>`)
+                .join('');
+            
+            if (userSelection.profileId === 'gesellschaft-sprache' && userSelection.gusChoice) {
+                let choiceName = '';
+                if(userSelection.gusChoice === 'wirtschaft'){
+                    choiceName = 'Wirtschaft';
+                } else if (userSelection.gusLanguageChoice) {
+                    choiceName = userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
+                }
+                profilbegleitendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+            
+            const coreSubjectsHtml = Object.entries(userSelection.coreSubjects)
+                .map(([subject, details]) => {
+                    const subjectName = subject.charAt(0).toUpperCase() + subject.slice(1);
+                    const levelName = details.level === 'eA' ? 'erhöht' : 'grundlegend';
+                    return `<li>${subjectName} (${levelName}) <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+                })
+                .join('');
+            
+            mainContent.innerHTML = `
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-bold text-center mb-6">Übersicht Ihrer bisherigen Wahl</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                    <div class="md:border-r md:border-gray-200 md:pr-6">
+                        <h3 class="font-bold text-lg mb-3 text-blue-700">Profilgebende Fächer <span class="text-sm text-gray-500 font-normal">(erhöht)</span></h3>
+                        <ul class="space-y-2 font-medium text-gray-700">${profilgebendHtml}</ul>
+                    </div>
+                    <div class="md:border-r md:border-gray-200 md:pr-6">
+                        <h3 class="font-bold text-lg mb-3 text-blue-700">Profilbegleitende Fächer <span class="text-sm text-gray-500 font-normal">(grundlegend)</span></h3>
+                        <ul class="space-y-2 font-medium text-gray-700">${profilbegleitendHtml}</ul>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-3 text-blue-700">Gewählte Kernfächer</h3>
+                        <ul class="space-y-2 font-medium text-gray-700">${coreSubjectsHtml}</ul>
+                    </div>
+                </div>
+                <div class="mt-6 pt-6 border-t border-gray-200 text-center">
+                    <h3 class="text-lg font-bold">Gesamtstundenzahl</h3>
+                    <p class="text-3xl font-extrabold text-blue-700 mt-2">${calculateTotalSWS()} SWS</p>
+                    <p class="text-gray-600">Erforderliche Stundenzahl: <span class="font-bold">32-36 SWS</span></p>
+                    <p class="text-sm text-gray-500 mt-2">Die restlichen Stunden werden im nächsten Schritt durch die Wahlpflichtfächer aufgefüllt.</p>
+                </div>
+            </div>`;
+        }
+        
+        function renderElectiveSelection() {
+            const obligations = checkObligations();
+            let html = `<div class="bg-white p-6 rounded-lg shadow-md space-y-6">`;
+
+            // Status Overview
+            html += `<div class="p-4 border rounded-lg bg-gray-50"> <h3 class="font-bold text-lg mb-3 text-center">Status der Belegverpflichtungen</h3> <ul class="space-y-2 text-sm">`;
+            const obligationAreas = [
+                { id: 'kunst', name: 'Künstlerischer Bereich' }, { id: 'gesellschaftswissenschaft', name: 'Gesellschaftswissenschaft (4 SWS)' },
+                { id: 'naturwissenschaft', name: 'Naturwissenschaft (4 SWS)' }, { id: 'religion_philosophie', name: 'Religion/Philosophie' },
+                { id: 'sport', name: 'Sport' },
+            ];
+            obligationAreas.forEach(area => {
+                const isMet = obligations[area.id];
+                const icon = isMet ? `<svg class="w-5 h-5 mr-2 flex-shrink-0 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>` : `<svg class="w-5 h-5 mr-2 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`;
+                html += `<li class="flex items-center font-medium ${isMet ? 'text-gray-800' : 'text-red-600'}">${icon} ${area.name}: ${isMet ? 'Erfüllt' : 'Noch offen'}</li>`;
+            });
+            html += `</ul></div>`;
+
+            // Get subjects already selected before this step
+            const subjectsBeforeElectives = [];
+            const profile = profiles.find(p => p.id === userSelection.profileId);
+            subjectsBeforeElectives.push(...profile.subjects);
+            
+            if (userSelection.profileId === 'kunst-kultur') {
+                if (userSelection.artMusicChoice === 'bildende-kunst') {
+                    subjectsBeforeElectives.push({ name: 'Kunst' }); // Use the name from elective list
+                } else if (userSelection.artMusicChoice === 'musik') {
+                    subjectsBeforeElectives.push({ name: 'Musik' }); // Use the name from elective list
+                }
+            }
+            
+            if (userSelection.gusChoice === 'wirtschaft') subjectsBeforeElectives.push({ name: 'Wirtschaft' });
+            if (userSelection.gusLanguageChoice) {
+                const langName = userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch';
+                subjectsBeforeElectives.push({ name: langName });
+            }
+            Object.entries(userSelection.coreSubjects).forEach(([name, details]) => {
+                if (details.level) subjectsBeforeElectives.push({ name: name.charAt(0).toUpperCase() + name.slice(1)});
+            });
+            const existingSubjectNames = subjectsBeforeElectives.map(s => s.name);
+
+            // Special rule for GiB profile
+            if (userSelection.profileId === 'gesellschaft-bewegung') {
+                if (!existingSubjectNames.includes('Sport')) existingSubjectNames.push('Sport');
+                if (!existingSubjectNames.includes('Sport+Theorie')) existingSubjectNames.push('Sport+Theorie');
+            }
+
+            // Render all available electives
+            const areaDisplayNames = {
+                'kunst': 'Kunst',
+                'gesellschaftswissenschaft': 'Gesellschaftswissenschaften',
+                'naturwissenschaft': 'Naturwissenschaften',
+                'religion_philosophie': 'Religion/Philosophie',
+                'sprache_weiter': 'Weitere Sprachen',
+                'sport': 'Sport'
+            };
+
+            html += `<div class="pt-4 border-t"><h3 class="font-bold text-center mb-4">Wahlpflichtfächer</h3><div class="space-y-4">`;
+            Object.entries(electiveSubjects).forEach(([area, subjects]) => {
+                const availableSubjects = subjects.filter(subject => !existingSubjectNames.includes(subject.name));
+                if (availableSubjects.length > 0) {
+                    const displayName = areaDisplayNames[area] || area;
+                    html += `<div><h4 class="font-semibold text-gray-700 mb-2">${displayName}</h4><div class="grid grid-cols-2 md:grid-cols-3 gap-2">`;
+                    availableSubjects.forEach(subject => {
+                         const isChecked = userSelection.electives[subject.name];
+                         const isDisabled = (subject.name === 'Sport' && userSelection.electives['Sport+Theorie']) || (subject.name === 'Sport+Theorie' && userSelection.electives['Sport']);
+                         html += `<div><input type="checkbox" id="elective-${subject.name}" value="${subject.name}" class="hidden elective-checkbox" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}><label for="elective-${subject.name}" class="block border rounded-md p-3 text-center text-sm font-medium cursor-pointer hover:bg-gray-50">${subject.name} <span class="text-gray-500">(${subject.sws} SWS)</span></label></div>`;
+                    });
+                     html += `</div></div>`;
+                }
+            });
+            html += `</div></div>`;
+
+            html += `</div>`;
+            mainContent.innerHTML = html;
+            addElectiveListeners();
+            validateElectives();
+        }
+
+        function renderFinalSummary() {
+            const selectedProfileData = profiles.find(p => p.id === userSelection.profileId);
+            if (!selectedProfileData) return;
+
+            // Fächer für die erste Tabelle aufbereiten
+            let profilgebendHtml = selectedProfileData.subjects
+                .filter(s => s.type === 'profilgebend' && !s.isCore)
+                .map(s => `<li>${s.name} <span class="text-gray-500 font-normal">(${s.sws} SWS)</span></li>`)
+                .join('');
+            if (userSelection.profileId === 'kunst-kultur' && userSelection.artMusicChoice) {
+                const choiceName = userSelection.artMusicChoice === 'bildende-kunst' ? 'Bildende Kunst' : 'Musik';
+                profilgebendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+            let profilbegleitendHtml = selectedProfileData.subjects
+                .filter(s => s.type === 'profilbegleitend')
+                .map(s => `<li>${s.name} <span class="text-gray-500 font-normal">(${s.sws} SWS)</span></li>`)
+                .join('');
+            if (userSelection.profileId === 'gesellschaft-sprache' && userSelection.gusChoice) {
+                let choiceName = '';
+                if(userSelection.gusChoice === 'wirtschaft'){ choiceName = 'Wirtschaft'; } 
+                else if (userSelection.gusLanguageChoice) { choiceName = userSelection.gusLanguageChoice === 'franzoesisch' ? 'Französisch' : 'Spanisch'; }
+                profilbegleitendHtml += `<li>${choiceName} <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+            }
+            const coreSubjectsHtml = Object.entries(userSelection.coreSubjects)
+                .map(([subject, details]) => {
+                    const subjectName = subject.charAt(0).toUpperCase() + subject.slice(1);
+                    const levelName = details.level === 'eA' ? 'erhöht' : 'grundlegend';
+                    return `<li>${subjectName} (${levelName}) <span class="text-gray-500 font-normal">(4 SWS)</span></li>`;
+                }).join('');
+            const electivesHtml = Object.values(userSelection.electives)
+                 .map(s => `<li>${s.name} <span class="text-gray-500 font-normal">(${s.sws} SWS)</span></li>`).join('');
+
+            const totalSWS = calculateTotalSWS();
+
+            // Fächer für die zweite Tabelle (Belegverpflichtungen) aufbereiten
+            const uniqueSubjects = getUniqueSelectedSubjects();
+            
+            const categorizedSubjects = {
+                kernfaecher: uniqueSubjects.filter(s => ['Deutsch', 'Englisch', 'Mathematik'].includes(s.name)),
+                gesellschaftswissenschaften: uniqueSubjects.filter(s => s.area === 'gesellschaftswissenschaft'),
+                naturwissenschaften: uniqueSubjects.filter(s => s.area === 'naturwissenschaft'),
+                kuenste: uniqueSubjects.filter(s => s.area === 'kunst'),
+                weitere: uniqueSubjects.filter(s => ['religion_philosophie', 'sport', 'sprache'].includes(s.area) && !['Deutsch', 'Englisch', 'Mathematik'].includes(s.name))
+            };
+             if (uniqueSubjects.find(s => s.name === 'Seminar')) {
+                categorizedSubjects.weitere.push(uniqueSubjects.find(s => s.name === 'Seminar'));
+            }
+
+            const obligations = checkObligations();
+            const obligationMap = [
+                 { name: 'Kernfächer', required: '(3 Fächer)', key: 'kernfaecher', subjects: categorizedSubjects.kernfaecher, met: true }, // Kernfächer sind immer erfüllt
+                 { name: 'Gesellschaftswissenschaften', required: '(mind. 4 SWS)', key: 'gesellschaftswissenschaften', subjects: categorizedSubjects.gesellschaftswissenschaften, met: obligations.gesellschaftswissenschaft },
+                 { name: 'Naturwissenschaften', required: '(mind. 4 SWS)', key: 'naturwissenschaften', subjects: categorizedSubjects.naturwissenschaften, met: obligations.naturwissenschaft },
+                 { name: 'Künste', required: '(1 Fach)', key: 'kuenste', subjects: categorizedSubjects.kuenste, met: obligations.kunst },
+                 { name: 'Weitere Fächer', required: '(Reli/Philo & Sport)', key: 'weitere', subjects: categorizedSubjects.weitere, met: obligations.religion_philosophie && obligations.sport },
+            ];
+            
+            let obligationsHtml = '';
+            obligationMap.forEach(cat => {
+                 const icon = cat.met 
+                    ? `<svg class="w-5 h-5 mr-2 flex-shrink-0 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>` 
+                    : `<svg class="w-5 h-5 mr-2 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`;
+                obligationsHtml += `
+                    <tr class="border-b">
+                        <td class="py-3 pr-3 align-top">
+                            <div class="flex items-center font-bold text-gray-700">
+                                ${icon} 
+                                <div>
+                                    ${cat.name}
+                                    <span class="block text-xs font-normal text-gray-500">${cat.required}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3">
+                            <ul class="space-y-1">${cat.subjects.map(s => `<li>${s.name} <span class="text-gray-500">(${s.sws} SWS)</span></li>`).join('') || '<li>-</li>'}</ul>
+                        </td>
+                    </tr>
+                `;
+            });
+
+
+            mainContent.innerHTML = `
+            <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
+                <div>
+                    <h2 class="text-2xl font-bold text-center mb-2">Finale Übersicht Ihrer Kurswahl</h2>
+                    <h3 class="text-lg font-semibold text-center text-gray-700 mb-6">Profil: <span class="text-blue-600">${selectedProfileData.name}</span></h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm">
+                        <div class="md:border-r md:border-gray-200 md:pr-6">
+                            <h3 class="font-bold text-lg mb-3 text-blue-700">Profilgebende Fächer <span class="text-sm text-gray-500 font-normal">(erhöht)</span></h3>
+                            <ul class="space-y-2 font-medium text-gray-700">${profilgebendHtml}</ul>
+                        </div>
+                        <div class="md:border-r md:border-gray-200 md:pr-6">
+                            <h3 class="font-bold text-lg mb-3 text-blue-700">Profilbegleitende Fächer <span class="text-sm text-gray-500 font-normal">(grundlegend)</span></h3>
+                            <ul class="space-y-2 font-medium text-gray-700">${profilbegleitendHtml}</ul>
+                        </div>
+                        <div class="md:border-r md:border-gray-200 md:pr-6">
+                            <h3 class="font-bold text-lg mb-3 text-blue-700">Gewählte Kernfächer</h3>
+                            <ul class="space-y-2 font-medium text-gray-700">${coreSubjectsHtml}</ul>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-3 text-blue-700">Wahlpflichtfächer</h3>
+                            <ul class="space-y-2 font-medium text-gray-700">${electivesHtml || '<li>-</li>'}</ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-6 border-t">
+                     <h2 class="text-2xl font-bold text-center mb-6">Übersicht der Belegverpflichtungen</h2>
+                     <table class="w-full text-sm text-left">
+                        <thead class="sr-only"><tr><th>Bereich</th><th>Fächer</th></tr></thead>
+                        <tbody>${obligationsHtml}</tbody>
+                     </table>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-gray-200 text-center">
+                    <h3 class="text-lg font-bold">Gesamtstundenzahl</h3>
+                    <p class="text-3xl font-extrabold text-blue-700 mt-2">${totalSWS} SWS</p>
+                    <p class="font-bold ${totalSWS >= 32 && totalSWS <= 36 ? 'text-green-600' : 'text-red-600'}">${totalSWS >= 32 && totalSWS <= 36 ? 'Stundenzahl im gültigen Bereich (32-36 SWS)' : 'Stundenzahl nicht im gültigen Bereich (32-36 SWS)'}</p>
+                </div>
+            </div>`;
+            
+            const allObligationsMet = Object.values(obligations).every(val => val === true);
+            nextButton.textContent = 'Abschliessen';
+            nextButton.disabled = !(totalSWS >= 32 && totalSWS <= 36 && allObligationsMet);
+        }
+
+        function validateCoreSubjects(){
+            const selections = Object.values(userSelection.coreSubjects).map(s => s.level);
+            const eACount = selections.filter(s => s === 'eA').length;
+            const allSelected = selections.every(s => s !== null);
+
+            selectionMessage.textContent = `Fächer auf erhöhtem Niveau: ${eACount} von 3`;
+
+            if(allSelected && eACount >= 2){
+                nextButton.disabled = false;
+                selectionMessage.classList.remove('text-red-600');
+                selectionMessage.classList.add('text-green-700');
+                selectionMessage.textContent += '. Auswahl gültig.';
+            } else {
+                nextButton.disabled = true;
+                if(allSelected) {
+                     selectionMessage.classList.remove('text-green-700');
+                     selectionMessage.classList.add('text-red-600');
+                     selectionMessage.textContent += '. Bitte wählen Sie mindestens 2 Fächer auf erhöhtem Niveau.';
+                }
+            }
+        }
+        
+        function validateElectives() {
+            const obligations = checkObligations();
+            const allObligationsMet = Object.values(obligations).every(val => val === true);
+            const totalSWS = calculateTotalSWS();
+            const minSWS = 32;
+            const maxSWS = 36;
+
+            selectionMessage.textContent = `Stundenzahl: ${totalSWS} (erlaubt: ${minSWS}-${maxSWS} SWS)`;
+
+            if (allObligationsMet && totalSWS >= minSWS && totalSWS <= maxSWS) {
+                nextButton.disabled = false;
+                selectionMessage.classList.remove('text-red-600');
+                selectionMessage.classList.add('text-green-700');
+                selectionMessage.textContent += '. Alle Bedingungen erfüllt.';
+            } else {
+                nextButton.disabled = true;
+                selectionMessage.classList.add('text-red-600');
+                selectionMessage.classList.remove('text-green-700');
+                 if (!allObligationsMet) {
+                    selectionMessage.textContent += '. Bitte alle Pflichtbereiche belegen.';
+                 } else if (totalSWS < minSWS) {
+                     selectionMessage.textContent += '. Stundenzahl zu niedrig.';
+                 } else if (totalSWS > maxSWS) {
+                     selectionMessage.textContent += '. Stundenzahl zu hoch.';
+                 }
+            }
+        }
+
+
+        // --- LOGIK ZUR AKTUALISIERUNG DER UI ---
+
+        function updateUIForStep(step) {
+            currentStep = step;
+            selectionMessage.textContent = '';
+            nextButton.disabled = true;
+            nextButton.textContent = 'Weiter';
+            const totalSteps = 6;
+            
+            progressBar.style.width = `${(step / totalSteps) * 100}%`;
+            progressText.textContent = `Schritt ${step} von ${totalSteps}`;
+
+            switch (step) {
+                case 1:
+                    headerSubtitle.textContent = 'Wählen Sie Ihr Wunschprofil für die Studienstufe.';
+                    progressText.textContent += ': Profilwahl';
+                    backButton.classList.add('hidden');
+                    renderProfileSelection();
+                    if (userSelection.profileId) nextButton.disabled = false;
+                    break;
+                case 2: // Sonderschritt
+                    backButton.classList.remove('hidden');
+                    progressText.textContent += ': Profil-Spezifika';
+                    if (userSelection.profileId === 'kunst-kultur') {
+                        headerSubtitle.textContent = 'Wählen Sie Ihr künstlerisches Hauptfach.';
+                        renderArtMusicSelection();
+                        if (userSelection.artMusicChoice) nextButton.disabled = false;
+                    } else if (userSelection.profileId === 'gesellschaft-sprache') {
+                        headerSubtitle.textContent = 'Wählen Sie Ihre profilbegleitende Option.';
+                        renderGusSelection();
+                        if(userSelection.gusChoice) nextButton.disabled = false;
+                    }
+                    break;
+                case 3: 
+                    headerSubtitle.textContent = 'Wählen Sie das Niveau Ihrer Kernfächer.';
+                     progressText.textContent += ': Kernfachwahl';
+                    backButton.classList.remove('hidden');
+                    renderCoreSubjectSelection();
+                    break;
+                case 4:
+                    headerSubtitle.textContent = 'Übersicht der bisher gewählten Fächer.';
+                    progressText.textContent += ': Übersicht';
+                    backButton.classList.remove('hidden');
+                    renderIntermediateSummary();
+                    nextButton.disabled = false; 
+                    break;
+                case 5:
+                    headerSubtitle.textContent = 'Wählen Sie Ihre Wahlpflichtfächer.';
+                    progressText.textContent += ': Wahlpflichtfächer';
+                    backButton.classList.remove('hidden');
+                    renderElectiveSelection();
+                    break;
+                case 6:
+                    headerSubtitle.textContent = 'Finale Zusammenfassung Ihrer Kurswahl.';
+                    progressText.textContent += ': Zusammenfassung';
+                    backButton.classList.remove('hidden');
+                    renderFinalSummary();
+                    break;
+            }
+        }
+        
+        // --- EVENT LISTENER ---
+
+        function addCardSelectionListeners() {
+            const cards = mainContent.querySelectorAll('.selection-card');
+            cards.forEach(card => {
+                card.addEventListener('click', () => {
+                    const selectionKey = card.dataset.selectionKey;
+                    
+                    if (selectionKey === 'profileId') {
+                        userSelection.artMusicChoice = null;
+                        userSelection.gusChoice = null;
+                        userSelection.gusLanguageChoice = null;
+                        userSelection.coreSubjects = { deutsch: { level: null, area: 'sprache', sws: 4 }, englisch: { level: null, area: 'sprache', sws: 4 }, mathematik: { level: null, area: 'mathematik', sws: 4 } };
+                        userSelection.electives = {};
+                    } else if (selectionKey === 'gusChoice') {
+                        userSelection.gusLanguageChoice = null;
+                    }
+
+                    document.querySelectorAll(`[data-selection-key="${selectionKey}"]`).forEach(c => c.classList.remove('selected', 'border-blue-600', 'ring-2', 'ring-blue-300'));
+                    card.classList.add('selected', 'border-blue-600', 'ring-2', 'ring-blue-300');
+                    
+                    userSelection[selectionKey] = card.id;
+                    nextButton.disabled = false;
+                    
+                    const selectedName = card.querySelector('h2').textContent;
+                    selectionMessage.textContent = `"${selectedName}" wurde ausgewählt.`;
+                });
+            });
+        }
+        
+        function addCoreSubjectListeners() {
+            const buttons = mainContent.querySelectorAll('.level-btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', (e) => {
+                    if(e.target.hasAttribute('disabled')) return;
+                    
+                    const subject = button.dataset.subject;
+                    const level = button.dataset.level;
+                    userSelection.coreSubjects[subject].level = level;
+
+                    document.querySelectorAll(`button[data-subject="${subject}"]`).forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+
+                    validateCoreSubjects();
+                });
+            });
+        }
+
+        function addElectiveListeners() {
+            const checkboxes = mainContent.querySelectorAll('.elective-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const subjectName = e.target.value;
+
+                    if (e.target.checked) {
+                        // Handle mutual exclusivity for Sport courses
+                        if (subjectName === 'Sport') delete userSelection.electives['Sport+Theorie'];
+                        if (subjectName === 'Sport+Theorie') delete userSelection.electives['Sport'];
+
+                        const allElectives = Object.values(electiveSubjects).flat();
+                        const subjectData = allElectives.find(s => s.name === subjectName);
+                        userSelection.electives[subjectName] = {
+                            name: subjectData.name,
+                            sws: subjectData.sws,
+                            area: Object.keys(electiveSubjects).find(key => electiveSubjects[key].some(s => s.name === subjectName))
+                        };
+                    } else {
+                        delete userSelection.electives[subjectName];
+                    }
+                    renderElectiveSelection(); // Re-render to update the obligation status and disabled states
+                });
+            });
+        }
+
+        nextButton.addEventListener('click', () => {
+            if(nextButton.textContent === 'Abschliessen') {
+                mainContent.innerHTML = `<div class="text-center p-8 bg-white rounded-lg shadow-md"><h2 class="text-2xl font-bold text-green-600">Vielen Dank!</h2><p class="mt-2 text-gray-700">Ihre Kurswahl wurde erfolgreich übermittelt.</p></div>`;
+                nextButton.classList.add('hidden');
+                backButton.classList.add('hidden');
+                selectionMessage.textContent = '';
+                return;
+            }
+
+            if (currentStep === 1) {
+                if (userSelection.profileId === 'kunst-kultur' || userSelection.profileId === 'gesellschaft-sprache') {
+                    updateUIForStep(2);
+                } else {
+                    updateUIForStep(3);
+                }
+            } else if (currentStep === 2) {
+                if (userSelection.profileId === 'kunst-kultur') {
+                    updateUIForStep(3);
+                } else if (userSelection.profileId === 'gesellschaft-sprache') {
+                    if (userSelection.gusChoice === 'wirtschaft') {
+                        updateUIForStep(3);
+                    } else if (userSelection.gusChoice === 'fremdsprache' && !userSelection.gusLanguageChoice) {
+                        headerSubtitle.textContent = 'Wählen Sie die 2. Fremdsprache.';
+                        nextButton.disabled = true;
+                        selectionMessage.textContent = '';
+                        renderGusLanguageSelection();
+                    } else if (userSelection.gusLanguageChoice) {
+                        updateUIForStep(3);
+                    }
+                }
+            } else if (currentStep === 3) {
+                updateUIForStep(4);
+            } else if (currentStep === 4) {
+                updateUIForStep(5);
+            } else if (currentStep === 5) {
+                updateUIForStep(6);
+            }
+        });
+
+        backButton.addEventListener('click', () => {
+             if (currentStep === 6) {
+                updateUIForStep(5);
+            } else if (currentStep === 5) {
+                updateUIForStep(4);
+            } else if (currentStep === 4) {
+                updateUIForStep(3);
+            } else if (currentStep === 3) {
+                 if (userSelection.profileId === 'kunst-kultur' || userSelection.profileId === 'gesellschaft-sprache') {
+                    updateUIForStep(2);
+                } else {
+                    updateUIForStep(1);
+                }
+            } else if (currentStep === 2) {
+                 if (userSelection.profileId === 'gesellschaft-sprache' && userSelection.gusChoice === 'fremdsprache' && mainContent.querySelector('[data-selection-key="gusLanguageChoice"]')) {
+                    userSelection.gusLanguageChoice = null;
+                    headerSubtitle.textContent = 'Wählen Sie Ihre profilbegleitende Option.';
+                    selectionMessage.textContent = '';
+                    nextButton.disabled = false;
+                    renderGusSelection();
+                 } else {
+                    updateUIForStep(1);
+                 }
+            }
+        });
+
+        // --- INITIALISIERUNG ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUIForStep(1);
+        });
+
+    </script>
+</body>
+</html>
+
